@@ -1,0 +1,95 @@
+# Checks on every push and pull request; publishing to npm (as stets.app) from a version tag.
+#
+# Publishing uses npm's trusted publishing (OIDC): no npm token is stored anywhere, and npm adds a provenance
+# statement that links each release to this repository, this workflow and the commit it was built from.
+# npm trusts: organization stets-app · repository cli · workflow file ci.yml · environment npm.
+# The environment "npm" requires a maintainer's approval before the publish job can run.
+#
+# Release: raise "version" in package.json on main, then
+#   git tag v<version> && git push origin v<version>
+# and approve the waiting "publish" job in GitHub.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false # never cancel a publish half-way
+
+jobs:
+  check:
+    # It runs on people's own computers: the oldest Node it claims (18) and the three systems.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, node: 18 }
+          - { os: ubuntu-24.04, node: 24 }
+          - { os: macos-15, node: 24 }
+          - { os: windows-2025, node: 24 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Parses, and the commands that change nothing run
+        shell: bash
+        env:
+          NO_COLOR: '1'
+          STETS_NO_OPEN: '1'
+        run: |
+          node --check stets.mjs
+          test "$(node stets.mjs --version)" = "$(node -p "require('./package.json').version")"
+          node stets.mjs help > /dev/null
+          node stets.mjs agent status --url http://localhost:9/mcp
+          # an unreachable address: setup stops before touching any agent, with exit 1
+          if node stets.mjs agent setup --yes --url http://localhost:9/mcp < /dev/null; then echo "setup should have refused"; exit 1; fi
+      - name: How agents are started (full path, Stets' own folder, never a decoy in the current folder; cmd.exe on Windows)
+        run: node test/safe-run.mjs
+      - name: The package holds exactly the CLI, its README, licence and package.json
+        if: matrix.os == 'ubuntu-24.04' && matrix.node == 24
+        run: |
+          files=$(npm pack --dry-run --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)[0].files.map(f=>f.path).sort().join(" ")))')
+          echo "$files"
+          test "$files" = "LICENSE README.md package.json stets.mjs"
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: npm # a maintainer approves each publish
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm checks
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: The tag names this version, and its commit is on main
+        run: |
+          v=$(node -p "require('./package.json').version")
+          test "$GITHUB_REF_NAME" = "v$v" || { echo "the tag is $GITHUB_REF_NAME but package.json says $v"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "release tags must point at a commit on main"; exit 1; }
+      - name: npm 11.5.1 or newer (trusted publishing)
+        run: |
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number);process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)" || npm install -g npm@11.19.0
+          npm --version
+      - run: npm publish

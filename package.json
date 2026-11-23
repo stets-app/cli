@@ -1,0 +1,36 @@
+{
+  "name": "stets.app",
+  "version": "0.1.2",
+  "description": "Connect your AI agents (Claude Code, Codex, Gemini CLI, Cursor, VS Code and more) to Stets, with Stet.",
+  "keywords": [
+    "stets",
+    "mcp",
+    "website",
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "cursor",
+    "agent"
+  ],
+  "homepage": "https://stets.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stets-app/cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/stets-app/cli/issues"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "stets": "stets.mjs"
+  },
+  "files": [
+    "stets.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
