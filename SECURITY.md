@@ -25,8 +25,8 @@ anywhere, including inside a repository you just cloned.
 ## Releases
 
 From 0.1.4 on, releases come from this repository's CI, with npm's trusted publishing (no npm token is stored
-anywhere). It takes two approvals. A maintainer approves the publish job in GitHub, and CI then only *stages* the
-release. The release becomes public once a maintainer approves it on npm, with two-factor authentication. npm shows
+anywhere). CI can only *stage* a release. It becomes public once a maintainer approves it on npm, with two-factor
+authentication. Only admins can push the release tags that start it. npm shows
 each release's provenance: the commit and workflow it was built from. 0.1.0 to 0.1.2 were published by hand. 0.1.0 had the problems listed in the README's changelog: please use the latest version.
 
 ## Reporting a problem

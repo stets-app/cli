@@ -3,10 +3,9 @@
 # Releases use npm's trusted publishing (OIDC): no npm token is stored anywhere, and npm adds a provenance
 # statement that links each release to this repository, this workflow and the commit it was built from.
 # npm trusts: organization stets-app · repository cli · workflow file ci.yml · environment npm, and only to
-# *stage* a release (npm's default and advice), so a release takes two approvals:
-#   1. In GitHub: the "publish" job waits in the environment "npm" until a maintainer approves it.
-#   2. On npm: the job stages the version. It becomes public when a maintainer approves it there, with 2FA.
-# The run's summary page says what to do at each step.
+# *stage* a release (npm's default and advice). A staged version becomes public only when a maintainer approves it
+# on npm, with 2FA; the run's summary page says how. The environment "npm" accepts only v* tags (and only admins
+# can push those); it has no reviewer, because the approval on npm is the gate.
 #
 # Release: raise "version" in package.json and VERSION in stets.mjs on main, then
 #   git tag v<version> && git push origin v<version>
@@ -67,35 +66,12 @@ jobs:
           echo "$files"
           test "$files" = "LICENSE README.md package.json stets.mjs"
 
-  next-step:
-    # On a tag, while "publish" waits: the run's page says what the maintainer does now.
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: check
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-    steps:
-      - name: "Your turn (1 of 2): approve the publish job"
-        run: |
-          v="${GITHUB_REF_NAME#v}"
-          echo "::notice title=Your turn (1 of 2) - approve the publish job::Review deployments (top of this page) > tick npm > Approve and deploy. It stages stets.app@$v on npm; nothing is public yet."
-          sed -e "s|@V@|$v|g" -e "s|@SHA@|${GITHUB_SHA:0:7}|g" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Your turn (1 of 2): approve the publish job
-
-          The checks passed for **stets.app@@V@** (tag v@V@, commit @SHA@).
-
-          1. At the top of this page, click **Review deployments**.
-          2. Tick **npm** and click **Approve and deploy**.
-
-          The publish job then **stages** stets.app@@V@ on npm. Nothing is public yet: this page then shows
-          step 2 of 2, approving it on npm.
-          EOF
-
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: npm # a maintainer approves each release here first
+    environment: npm # npm's trusted publisher checks this name; only v* tags may use it
     permissions:
       contents: read
       id-token: write # the OIDC token npm checks
@@ -122,15 +98,15 @@ jobs:
         run: |
           set -o pipefail
           npm stage publish --provenance 2>&1 | tee "$RUNNER_TEMP/npm.log"
-      - name: "Your turn (2 of 2): approve the release on npm"
+      - name: "Your turn: approve the release on npm"
         if: success()
         run: |
           v="${GITHUB_REF_NAME#v}"
           sum=$(sed -n 's/.*npm notice shasum: *\([0-9a-f]*\).*/\1/p' "$RUNNER_TEMP/npm.log" | head -1)
           id=$(sed -n 's/.*staged with id \([0-9a-f-]*\).*/\1/p' "$RUNNER_TEMP/npm.log" | head -1)
-          echo "::notice title=Your turn (2 of 2) - approve stets.app@$v on npm::It is staged, not public. npmjs.com > account settings > Staged Packages > stets.app $v > Approve (2FA). Or in your own terminal: npm stage approve ${id:-<id from npm stage list stets.app>}"
+          echo "::notice title=Your turn - approve stets.app@$v on npm::It is staged, not public. npmjs.com > account settings > Staged Packages > stets.app $v > Approve (2FA). Or in your own terminal: npm stage approve ${id:-<id from npm stage list stets.app>}"
           sed -e "s|@V@|$v|g" -e "s|@SHA@|${GITHUB_SHA:0:7}|g" -e "s|@SUM@|${sum:-in the npm output below}|g" -e "s|@ID@|${id:-<stage id>}|g" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Your turn (2 of 2): approve stets.app@@V@ on npm
+          ## Your turn: approve stets.app@@V@ on npm
 
           CI has **staged** stets.app@@V@, built from commit @SHA@. It is **not public yet**:
           `npx stets.app` still installs the previous version.
