@@ -1,13 +1,15 @@
-# Checks on every push and pull request; publishing to npm (as stets.app) from a version tag.
+# Checks on every push and pull request; releases to npm (as stets.app) from a version tag.
 #
-# Publishing uses npm's trusted publishing (OIDC): no npm token is stored anywhere, and npm adds a provenance
+# Releases use npm's trusted publishing (OIDC): no npm token is stored anywhere, and npm adds a provenance
 # statement that links each release to this repository, this workflow and the commit it was built from.
-# npm trusts: organization stets-app · repository cli · workflow file ci.yml · environment npm.
-# The environment "npm" requires a maintainer's approval before the publish job can run.
+# npm trusts: organization stets-app · repository cli · workflow file ci.yml · environment npm, and only to
+# *stage* a release (npm's default and advice), so a release takes two approvals:
+#   1. In GitHub: the "publish" job waits in the environment "npm" until a maintainer approves it.
+#   2. On npm: the job stages the version. It becomes public when a maintainer approves it there, with 2FA.
+# The run's summary page says what to do at each step.
 #
-# Release: raise "version" in package.json on main, then
+# Release: raise "version" in package.json and VERSION in stets.mjs on main, then
 #   git tag v<version> && git push origin v<version>
-# and approve the waiting "publish" job in GitHub.
 name: CI
 
 on:
@@ -22,7 +24,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: false # never cancel a publish half-way
+  cancel-in-progress: false # never cancel a release half-way
 
 jobs:
   check:
@@ -65,12 +67,35 @@ jobs:
           echo "$files"
           test "$files" = "LICENSE README.md package.json stets.mjs"
 
+  next-step:
+    # On a tag, while "publish" waits: the run's page says what the maintainer does now.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: "Your turn (1 of 2): approve the publish job"
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          echo "::notice title=Your turn (1 of 2) - approve the publish job::Review deployments (top of this page) > tick npm > Approve and deploy. It stages stets.app@$v on npm; nothing is public yet."
+          sed -e "s|@V@|$v|g" -e "s|@SHA@|${GITHUB_SHA:0:7}|g" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Your turn (1 of 2): approve the publish job
+
+          The checks passed for **stets.app@@V@** (tag v@V@, commit @SHA@).
+
+          1. At the top of this page, click **Review deployments**.
+          2. Tick **npm** and click **Approve and deploy**.
+
+          The publish job then **stages** stets.app@@V@ on npm. Nothing is public yet: this page then shows
+          step 2 of 2, approving it on npm.
+          EOF
+
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: npm # a maintainer approves each publish
+    environment: npm # a maintainer approves each release here first
     permissions:
       contents: read
       id-token: write # the OIDC token npm checks
@@ -88,8 +113,46 @@ jobs:
           v=$(node -p "require('./package.json').version")
           test "$GITHUB_REF_NAME" = "v$v" || { echo "the tag is $GITHUB_REF_NAME but package.json says $v"; exit 1; }
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "release tags must point at a commit on main"; exit 1; }
-      - name: npm 11.5.1 or newer (trusted publishing)
+      - name: npm 11.15.0 or newer (staged publishing)
         run: |
-          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number);process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)" || npm install -g npm@11.19.0
+          node -e 'const [a,b]=process.argv[1].split(".").map(Number);process.exit(a>11||(a===11&&b>=15)?0:1)' "$(npm --version)" || npm install -g npm@11.19.0
           npm --version
-      - run: npm publish
+      - name: Stage the release on npm (not public until a maintainer approves it there)
+        id: stage
+        run: |
+          set -o pipefail
+          npm stage publish --provenance 2>&1 | tee "$RUNNER_TEMP/npm.log"
+      - name: "Your turn (2 of 2): approve the release on npm"
+        if: success()
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          sum=$(sed -n 's/.*npm notice shasum: *\([0-9a-f]*\).*/\1/p' "$RUNNER_TEMP/npm.log" | head -1)
+          echo "::notice title=Your turn (2 of 2) - approve stets.app@$v on npm::It is staged, not public. npmjs.com > account settings > Staged Packages > stets.app $v > Approve (2FA). Or: npm stage list stets.app, then npm stage approve <id>."
+          sed -e "s|@V@|$v|g" -e "s|@SHA@|${GITHUB_SHA:0:7}|g" -e "s|@SUM@|${sum:-in the npm output below}|g" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Your turn (2 of 2): approve stets.app@@V@ on npm
+
+          CI has **staged** stets.app@@V@, built from commit @SHA@. It is **not public yet**:
+          `npx stets.app` still installs the previous version.
+
+          **On npmjs.com:** sign in, open your account settings, then the **Staged Packages** tab. Find
+          **stets.app @V@** and click **Approve** (it asks for your 2FA).
+
+          **Or in your own terminal:**
+
+          ```
+          npm stage list stets.app        # shows the stage id
+          npm stage approve <stage id>    # asks for your 2FA
+          ```
+
+          The staged package's shasum is **@SUM@**. If anything looks unexpected, don't approve it:
+          `npm stage reject <stage id>` removes it.
+
+          Afterwards, `npm view stets.app version` says @V@, and https://www.npmjs.com/package/stets.app shows
+          its provenance: this repository, ci.yml and commit @SHA@.
+          EOF
+          { echo; echo '<details><summary>npm output</summary>'; echo; echo '```'; cat "$RUNNER_TEMP/npm.log"; echo '```'; echo '</details>'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Staging failed (nothing was published)
+        if: failure() && steps.stage.outcome == 'failure'
+        run: |
+          echo "::error title=Staging failed - nothing was published::npm refused to stage the release. Its output is in this run's summary."
+          { echo '## Staging failed: nothing was published'; echo; echo 'npm refused to stage the release. Its output:'; echo; echo '```'; cat "$RUNNER_TEMP/npm.log"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

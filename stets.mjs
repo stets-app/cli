@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const VERSION = '0.1.3';
+const VERSION = '0.1.4';
 const DEFAULT_URL = 'https://stets.app/mcp';
 const env = process.env;
 const out = process.stdout;
