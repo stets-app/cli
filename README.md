@@ -90,9 +90,11 @@ problem: [SECURITY.md](SECURITY.md).
 
 ## Changelog
 
+- **0.1.3 (2026-11-23):** the first release from this repository (github.com/stets-app/cli), published by its CI
+  with npm provenance. Same code as 0.1.2, plus links to this repository and SECURITY.md.
 - **0.1.2 (2026-11-23):** MIT licence. On Node 18, a Stets on `localhost` that only listens on 127.0.0.1 was
   reported as unreachable. Claude Code's project file (`.mcp.json`) is checked for links too. A test
-  (`cli/test/safe-run.mjs`, run in CI on Linux, macOS and Windows) shows agents start by full path, in Stets' own
+  (`test/safe-run.mjs`, run in CI on Linux, macOS and Windows) shows agents start by full path, in Stets' own
   folder, never from the current folder, including through Windows' cmd.exe.
 - **0.1.1 (2026-11-23), security fixes. Please update.**
   - OpenCode was run inside the current folder, so in a cloned repo it could load that repo's plugins and start

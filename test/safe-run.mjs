@@ -6,7 +6,7 @@
 //   - on Windows, an address with a character cmd.exe reads as a command is refused.
 // A fake `claude` (a small Node script, with a .cmd wrapper on Windows) records each call. Nothing real is touched:
 // HOME, USERPROFILE and the agent's state all live in a temporary folder.
-//   node cli/test/safe-run.mjs
+//   node test/safe-run.mjs
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';

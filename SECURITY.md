@@ -24,8 +24,9 @@ anywhere, including inside a repository you just cloned.
 
 ## Releases
 
-Releases are published from this repository's CI with npm's trusted publishing, after a maintainer approves them.
-npm shows each release's provenance: the commit and workflow it was built from.
+From 0.1.3 on, releases are published from this repository's CI with npm's trusted publishing, after a maintainer
+approves them, and npm shows each one's provenance: the commit and workflow it was built from. 0.1.0 to 0.1.2 were
+published by hand. 0.1.0 had the problems listed in the README's changelog: please use the latest version.
 
 ## Reporting a problem
 
