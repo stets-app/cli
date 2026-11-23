@@ -127,8 +127,9 @@ jobs:
         run: |
           v="${GITHUB_REF_NAME#v}"
           sum=$(sed -n 's/.*npm notice shasum: *\([0-9a-f]*\).*/\1/p' "$RUNNER_TEMP/npm.log" | head -1)
-          echo "::notice title=Your turn (2 of 2) - approve stets.app@$v on npm::It is staged, not public. npmjs.com > account settings > Staged Packages > stets.app $v > Approve (2FA). Or: npm stage list stets.app, then npm stage approve <id>."
-          sed -e "s|@V@|$v|g" -e "s|@SHA@|${GITHUB_SHA:0:7}|g" -e "s|@SUM@|${sum:-in the npm output below}|g" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          id=$(sed -n 's/.*staged with id \([0-9a-f-]*\).*/\1/p' "$RUNNER_TEMP/npm.log" | head -1)
+          echo "::notice title=Your turn (2 of 2) - approve stets.app@$v on npm::It is staged, not public. npmjs.com > account settings > Staged Packages > stets.app $v > Approve (2FA). Or in your own terminal: npm stage approve ${id:-<id from npm stage list stets.app>}"
+          sed -e "s|@V@|$v|g" -e "s|@SHA@|${GITHUB_SHA:0:7}|g" -e "s|@SUM@|${sum:-in the npm output below}|g" -e "s|@ID@|${id:-<stage id>}|g" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## Your turn (2 of 2): approve stets.app@@V@ on npm
 
           CI has **staged** stets.app@@V@, built from commit @SHA@. It is **not public yet**:
@@ -137,15 +138,16 @@ jobs:
           **On npmjs.com:** sign in, open your account settings, then the **Staged Packages** tab. Find
           **stets.app @V@** and click **Approve** (it asks for your 2FA).
 
-          **Or in your own terminal:**
+          **Or in your own terminal** (it asks for your 2FA in the browser):
 
           ```
-          npm stage list stets.app        # shows the stage id
-          npm stage approve <stage id>    # asks for your 2FA
+          npm stage approve @ID@
           ```
+
+          `npm stage list stets.app` lists what is staged, and `npm stage download @ID@` fetches it to look at.
 
           The staged package's shasum is **@SUM@**. If anything looks unexpected, don't approve it:
-          `npm stage reject <stage id>` removes it.
+          `npm stage reject @ID@` removes it.
 
           Afterwards, `npm view stets.app version` says @V@, and https://www.npmjs.com/package/stets.app shows
           its provenance: this repository, ci.yml and commit @SHA@.
