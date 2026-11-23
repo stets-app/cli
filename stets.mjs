@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const VERSION = '0.1.4';
+const VERSION = '0.1.5';
 const DEFAULT_URL = 'https://stets.app/mcp';
 const env = process.env;
 const out = process.stdout;
@@ -66,8 +66,8 @@ const red = /truecolor|24bit/i.test(env.COLORTERM || '') ? sgr('38;2;225;6;0') :
 
 // Every glyph is one column wide; --ascii (or a plain console) swaps the few non-ASCII ones.
 const G = ASCII
-  ? { ok: '+', no: 'x', warn: '!', ptr: '>', on: 'x', off: ' ', sep: '-', h: '-', v: '|', tl: '+', tr: '+', bl: '+', br: '+', smile: '_', dots: '...', spin: ['-', '\\', '|', '/'] }
-  : { ok: '✓', no: '✗', warn: '!', ptr: '▶', on: '✓', off: '·', sep: '·', h: '─', v: '│', tl: '┌', tr: '┐', bl: '└', br: '┘', smile: '‿', dots: '…', spin: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] };
+  ? { ok: '+', no: 'x', warn: '!', ptr: '>', on: 'x', off: ' ', sep: '-', h: '-', v: '|', tl: '+', tr: '+', bl: '+', br: '+', smile: '_', eye: 'o', grip: '\'', roller: '###', dots: '...', spin: ['-', '\\', '|', '/'] }
+  : { ok: '✓', no: '✗', warn: '!', ptr: '▶', on: '✓', off: '·', sep: '·', h: '─', v: '│', tl: '┌', tr: '┐', bl: '└', br: '┘', smile: '‿', eye: '•', grip: '╯', roller: '▄▄▄', dots: '…', spin: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] };
 
 const visible = (s) => String(s).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').length;
 const padTo = (s, w) => s + ' '.repeat(Math.max(0, w - visible(s)));
@@ -78,26 +78,44 @@ const hideCursor = () => { if (TTY) { out.write('\x1b[?25l'); cursorHidden = tru
 process.on('exit', showCursor);
 process.on('SIGINT', () => { showCursor(); say(); process.exit(130); });
 
-// ---------- Stet ----------
+// ---------- Stet and the logo ----------
+// The same drawings are on stets.app/brand and in Stet's hello in the browser console: change them together.
 
-/** Stet, the builder from stets.app, in text: folded paper hat, round head, a roller on a pole.
- *  Poses: stand, wave (arm up), cheer (arm up, happy eyes). Seven rows, the art fits in 22 columns. */
+/** The Stets logo, the mark and "stets", in half blocks: four rows, 34 columns. Left out with --ascii. */
+const LOGO = [
+  '▄▀▀▀▀▀▀▀        █         █',
+  '█ ▀▀▀▀▀▄  ▄▀▀▀ ▀█▀▀ ▄▀▀▄ ▀█▀▀ ▄▀▀▀',
+  ' ▀▀▀▀▀ █   ▀▀▄  █   █▀▀▀  █    ▀▀▄',
+  '▀▀▀▀▀▀▀   ▀▀▀   ▀▀▀  ▀▀▀  ▀▀▀ ▀▀▀',
+];
+const LOGO_W = 34;
+
+/** Stet, the builder from stets.app, small: paper hat, round face, a body, his roller in his hand. Four rows (the
+ *  logo's height), ten columns. The poses are the steps of the little text dance:
+ *  stand (roller up), wave (other arm up, roller out front), pls (roller out front); cheer is wave with happy eyes,
+ *  and blink closes his eyes. */
 function stet(pose = 'stand', blink = false) {
-  const eyes = blink ? '- -' : pose === 'cheer' ? '^ ^' : 'o o';
-  const up = pose === 'wave' || pose === 'cheer';
-  return [
-    '     /\\',
-    `    /--\\       [${red('####')}]`,
-    `${up ? ' \\ ' : '   '}(${eyes})        /`,
-    `${up ? '  \\ ' : '    '}\\${G.smile}/        /`,
-    `${up ? '   `-' : '   --'}|--------'`,
-    '     |',
-    '    / \\',
-  ];
+  const eye = blink ? '-' : pose === 'cheer' ? '^' : G.eye;
+  const face = `(${eye}${G.smile}${eye})`;
+  const body = {
+    stand: [` ${face} ${red(G.roller)}`, `<)  )${G.h}${G.h}${G.grip}`],
+    wave: [`\\${face}`, ` (  (>${red(G.roller)}`],
+    pls: [` ${face}`, `<)  )>${red(G.roller)}`],
+  }[pose === 'cheer' ? 'wave' : pose];
+  return ['   /\\', ...body, '  /  \\'];
 }
-const ART_W = 24;
-/** Stet with lines of text beside him, from his second row down. */
-const scene = (pose, side = [], blink = false) => stet(pose, blink).map((row, i) => (side[i - 1] ? padTo(row, ART_W) + side[i - 1] : row));
+const DANCE = ['stand', 'wave', 'pls'];
+const ART_W = 13;
+/** Stet with lines of text beside him, from his face down; more lines than that go on below him. */
+const scene = (pose, side = [], blink = false) => {
+  const art = stet(pose, blink);
+  return Array.from({ length: Math.max(art.length, side.length + 1) }, (_, i) => `  ${side[i - 1] ? padTo(art[i] || '', ART_W) + side[i - 1] : art[i] || ''}`.replace(/ +$/, ''));
+};
+/** The logo with Stet beside it (his hat level with the t's, his feet on the baseline), and a note after his feet. */
+const masthead = (pose = 'stand', blink = false, note = '') => {
+  const s = stet(pose, blink);
+  return LOGO.map((l, i) => `  ${padTo(l, LOGO_W + 3)}${i === 3 && note ? padTo(s[3], ART_W) + note : s[i]}`.replace(/ +$/, ''));
+};
 
 function draw(lines, previous) {
   if (previous) out.write(`\x1b[${previous}A\r`);
@@ -105,9 +123,14 @@ function draw(lines, previous) {
   return lines.length;
 }
 
-/** Stet waves while his line types out; static without a colour terminal. */
+/** The logo with Stet beside it and his lines below; with --ascii, Stet with the name and his lines beside him. */
+const hello = (pose, side, blink) => (ASCII
+  ? scene(pose, [bold('Stets') + dim(` ${VERSION}`), ...side], blink)
+  : [...masthead(pose, blink, dim(VERSION)), '', ...side.map((l) => (l ? `  ${l}` : l))]);
+
+/** Stet dances while his line types out, then waves; static without a colour terminal. */
 async function greet(side) {
-  if (!ANIM) { say(); draw(scene('wave', side)); say(); return; }
+  if (!ANIM) { say(); draw(hello('wave', side)); say(); return; }
   hideCursor();
   say();
   // the first k characters of his lines, the rest still to come
@@ -118,12 +141,12 @@ async function greet(side) {
       left -= w;
       return take === w ? l : l.replace(/\x1b\[[0-9;]*m/g, '').slice(0, take);
     });
-    return scene(pose, shown, blink);
+    return hello(pose, shown, blink);
   };
   const total = side.reduce((n, l) => n + visible(l), 0);
-  let rows = draw(frame('wave', 0), 0);
-  for (let k = 0, f = 0; k <= total; k += 2, f++) {
-    rows = draw(frame(Math.floor(f / 5) % 2 ? 'stand' : 'wave', k), rows);
+  let rows = draw(frame('stand', 0), 0);
+  for (let k = 0, f = 0; k <= total; k += 2, f++) { // he dances a step every fifth frame
+    rows = draw(frame(DANCE[Math.floor(f / 5) % DANCE.length], k), rows);
     await sleep(18);
   }
   rows = draw(frame('wave', total, true), rows);
@@ -1069,7 +1092,7 @@ async function where(scopeFlag) {
 
 async function setup() {
   const { url, name, host, scope: scopeFlag, trusted: known } = target();
-  await greet([bold('Stets') + dim(` ${VERSION}`), 'Hi, I\'m Stet. Let\'s get your agent', `building websites with ${host}.`]);
+  await greet(['Hi, I\'m Stet. Let\'s get your agent', `building websites with ${host}.`]);
   if (!known && !(await confirmServer(host))) { say(dim('  Nothing changed.')); return; }
   if (!(await withSpinner(`Knocking on ${host}${G.dots}`, reachable(url)))) {
     fail(`Can't reach ${url}. Check the address${['localhost', '127.0.0.1'].some((h) => host.startsWith(h)) ? ', and that Stets is running there' : ' and your internet connection'}. Nothing was changed.`);
@@ -1261,7 +1284,7 @@ function help() {
     '  --ascii, --no-color   Plain output (NO_COLOR works too)',
   ];
   say();
-  draw(scene('stand', [bold('Stets') + dim(` ${VERSION}`), 'Websites your agent builds.']));
+  draw(ASCII ? scene('stand', [bold('Stets') + dim(` ${VERSION}`), 'Websites your agent builds.']) : masthead());
   say();
   for (const l of lines) say(l ? `  ${l}` : '');
   say();

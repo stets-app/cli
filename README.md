@@ -90,6 +90,9 @@ problem: [SECURITY.md](SECURITY.md).
 
 ## Changelog
 
+- **0.1.5 (2026-11-23):** Stet and the logo, redrawn: the Stets logo in block letters with a small Stet beside it,
+  his roller in Stets red, and a little dance while he says hello. It's the same drawing as on stets.app/brand.
+  With `--ascii`, Stet alone, in plain characters.
 - **0.1.4 (2026-11-23):** the first release from this repository (github.com/stets-app/cli): staged by its CI with
   npm provenance, then approved by a maintainer on npm. Same code as 0.1.2, plus links to this repository and
   SECURITY.md.

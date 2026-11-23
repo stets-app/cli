@@ -1,6 +1,6 @@
 {
   "name": "stets.app",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Connect your AI agents (Claude Code, Codex, Gemini CLI, Cursor, VS Code and more) to Stets, with Stet.",
   "keywords": [
     "stets",
